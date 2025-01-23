@@ -5,6 +5,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.AwtWindow
@@ -12,9 +13,10 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.github.kittinunf.fuel.Fuel
 import com.github.kittinunf.fuel.core.FileDataPart
+import kotlinx.coroutines.launch
+import java.awt.Dimension
 import java.awt.FileDialog
 import java.awt.Frame
-import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FilenameFilter
 import java.text.SimpleDateFormat
@@ -25,18 +27,23 @@ import java.util.*
 fun App() {
     val coroutineScope = rememberCoroutineScope()
 
-    val time = Calendar.getInstance().time
+    var calendar = Calendar.getInstance()
     val formatter = SimpleDateFormat("MM-yyyy")
-    val current = formatter.format(time)
 
-    var url by remember { mutableStateOf("http://localhost:8080/api/v1/charge-card/import/${current}") }
+    val importUrlPart = "/api/v1/charge-card/import/"
+    val fleetUrlPart = "/api/v1/fleet/import/"
+
+    var host by remember { mutableStateOf("http://localhost:8080") }
+    var period by remember { mutableStateOf(formatter.format(calendar.time)) }
     var apiKey by remember { mutableStateOf("password1234") }
+
     var isFileChooserOpen by remember { mutableStateOf(false) }
     var chosenFilePath by remember { mutableStateOf("") }
 
     var importText by remember { mutableStateOf("Import!") }
-    var output by remember { mutableStateOf("") }
     var isImportEnabled by remember { mutableStateOf(false) }
+
+    var outputText by remember { mutableStateOf("") }
 
     if (isFileChooserOpen) {
         FileDialog(
@@ -47,13 +54,13 @@ fun App() {
                 if (chosenFilePath.isNotEmpty()) {
                     val importFile = isImportFile(chosenFilePath)
                     if (importFile != null) {
-                        output = "The file is a charge card import card, press import to import the file"
+                        outputText = "The file is a charge card import card, press import to import the file"
                         isImportEnabled = true
                     } else {
-                        output = "The selected file is not an import file (missing the correct headers)"
+                        outputText = "The selected file is not an import file (missing the correct headers)"
                     }
                 } else {
-                    output = "No file selected"
+                    outputText = "No file selected"
                 }
             }
         )
@@ -62,14 +69,47 @@ fun App() {
     MaterialTheme {
 
         Column(modifier = Modifier.padding(20.dp)) {
-            OutlinedTextField(
-                value = url,
-                onValueChange = {
-                    url = it.trim()
-                },
-                label = { Text("Url") },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row() {
+                OutlinedTextField(
+                    value = host,
+                    onValueChange = {
+                        host = it.trim()
+                    },
+                    label = { Text("Host") },
+                    modifier = Modifier
+                        .weight(4F)
+                        .padding(0.dp, 0.dp, 10.dp, 0.dp),
+                )
+
+                Button(
+                    onClick = {
+                        calendar.set(Calendar.MONTH, calendar.get(Calendar.MONTH) - 1)
+                        period = formatter.format(calendar.time)
+                    },
+                    modifier = Modifier.weight(0.25F, true).align(Alignment.CenterVertically),
+                ) {
+                    Text("↓")
+                }
+
+                OutlinedTextField(
+                    value = period,
+                    onValueChange = {
+
+                    },
+                    label = { Text("Period") },
+                    modifier = Modifier.weight(1F).padding(10.dp, 0.dp, 10.dp, 0.dp),
+                )
+
+                Button(
+                    onClick = {
+                        calendar.set(Calendar.MONTH, calendar.get(Calendar.MONTH) + 1)
+                        period = formatter.format(calendar.time)
+                    },
+                    modifier = Modifier.weight(0.25F, true).align(Alignment.CenterVertically),
+                ) {
+                    Text("↑")
+                }
+            }
 
             Spacer(Modifier.requiredHeight(10.dp))
 
@@ -98,10 +138,14 @@ fun App() {
                     val importFile = isImportFile(chosenFilePath)
                     if (importFile != null) {
                         coroutineScope.launch {
-                            uploadFile(importFile, url, apiKey, { body: String, statusCode: Int -> output = body })
+                            uploadFile(
+                                importFile,
+                                host.trimEnd('/') + importUrlPart + period,
+                                apiKey,
+                                { body: String, statusCode: Int -> outputText = body })
                         }
                     } else {
-                        output = "Import file not found, was it removed?"
+                        outputText = "Import file not found, was it removed?"
                     }
                     importText = "Import!"
                     isImportEnabled = false
@@ -112,7 +156,7 @@ fun App() {
 
             Spacer(Modifier.requiredHeight(10.dp))
 
-            Text(text = output, modifier = Modifier.fillMaxWidth().fillMaxHeight())
+            Text(text = outputText, modifier = Modifier.fillMaxWidth().fillMaxHeight())
         }
 
     }
@@ -120,6 +164,7 @@ fun App() {
 
 fun main() = application {
     Window(onCloseRequest = ::exitApplication, title = "Rebate Uploader") {
+        window.minimumSize = Dimension(1200, 800)
         App()
     }
 }
@@ -155,7 +200,7 @@ suspend fun uploadFile(file: File, url: String, apiKey: String, handler: (String
 @Composable
 private fun FileDialog(
     parent: Frame? = null,
-    onCloseRequest: (result: String?) -> Unit
+    onCloseRequest: (result: String?) -> Unit,
 ) = AwtWindow(
     create = {
         object : FileDialog(parent, "Choose a file", LOAD) {
