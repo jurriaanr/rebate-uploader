@@ -7,12 +7,16 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.AwtWindow
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.github.kittinunf.fuel.Fuel
 import com.github.kittinunf.fuel.core.FileDataPart
+import java.awt.FileDialog
+import java.awt.Frame
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FilenameFilter
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -27,10 +31,33 @@ fun App() {
 
     var url by remember { mutableStateOf("http://localhost:8080/api/v1/charge-card/import/${current}") }
     var apiKey by remember { mutableStateOf("password1234") }
+    var isFileChooserOpen by remember { mutableStateOf(false) }
+    var chosenFilePath by remember { mutableStateOf("") }
 
     var importText by remember { mutableStateOf("Import!") }
     var output by remember { mutableStateOf("") }
-    var importEnabled by remember { mutableStateOf(false) }
+    var isImportEnabled by remember { mutableStateOf(false) }
+
+    if (isFileChooserOpen) {
+        FileDialog(
+            onCloseRequest = {
+                isFileChooserOpen = false
+                chosenFilePath = it ?: ""
+
+                if (chosenFilePath.isNotEmpty()) {
+                    val importFile = isImportFile(chosenFilePath)
+                    if (importFile != null) {
+                        output = "The file is a charge card import card, press import to import the file"
+                        isImportEnabled = true
+                    } else {
+                        output = "The selected file is not an import file (missing the correct headers)"
+                    }
+                } else {
+                    output = "No file selected"
+                }
+            }
+        )
+    }
 
     MaterialTheme {
 
@@ -59,41 +86,27 @@ fun App() {
 
             Row() {
                 Button(onClick = {
-                    val files = checkFiles()
-                    val importFile = determineImportFile(files)
-                    if (importFile != null) {
-                        output = "Found this file: " + importFile.name
-                        importEnabled = true
-                    } else {
-                        output = "No import found"
-                        importEnabled = false
-                    }
+                    isFileChooserOpen = true
                 }) {
-                    Text("Check")
+                    Text("Select file")
                 }
 
                 Spacer(Modifier.requiredWidth(5.dp))
 
                 Button(onClick = {
                     importText = "Importing"
-                    val importFile = determineImportFile(checkFiles())
+                    val importFile = isImportFile(chosenFilePath)
                     if (importFile != null) {
                         coroutineScope.launch {
                             uploadFile(importFile, url, apiKey, { body: String, statusCode: Int -> output = body })
                         }
                     } else {
-                        output = "Import file not found"
+                        output = "Import file not found, was it removed?"
                     }
-                    importEnabled = false
-                }, enabled = importEnabled) {
+                    importText = "Import!"
+                    isImportEnabled = false
+                }, enabled = isImportEnabled) {
                     Text(importText)
-//
-//
-//                    url.httpUpload()
-//                        .add(FileDataPart(file, name = "file"))
-//                        .response { request, response, result ->
-//                            println(response)
-//                        }.get()
                 }
             }
 
@@ -117,19 +130,16 @@ fun checkFiles(): List<File> {
     return files
 }
 
-fun determineImportFile(files: List<File>): File? {
-    for (file in files) {
-        val firstLine = file.useLines { it.firstOrNull() }
+fun isImportFile(path: String): File? {
+    val file = File(path)
+    val firstLine = file.useLines { it.firstOrNull() }
 
-        println(firstLine?.lowercase()?.contains("country"))
-        println(firstLine?.lowercase()?.contains("rfid number"))
-        if (
-            firstLine != null &&
-            firstLine.lowercase().contains("country") &&
-            firstLine.lowercase().contains("rfid number")
-        ) {
-            return file
-        }
+    if (
+        firstLine != null &&
+        firstLine.lowercase().contains("country") &&
+        firstLine.lowercase().contains("rfid number")
+    ) {
+        return file
     }
 
     return null
@@ -141,3 +151,23 @@ suspend fun uploadFile(file: File, url: String, apiKey: String, handler: (String
         .header(mapOf("Authorization" to "Bearer $apiKey"))
         .responseString() { _, response, _ -> handler(String(response.data), response.statusCode) }
 }
+
+@Composable
+private fun FileDialog(
+    parent: Frame? = null,
+    onCloseRequest: (result: String?) -> Unit
+) = AwtWindow(
+    create = {
+        object : FileDialog(parent, "Choose a file", LOAD) {
+            override fun setVisible(value: Boolean) {
+                super.setVisible(value)
+                super.setMultipleMode(false)
+                super.setFilenameFilter(FilenameFilter { _, name -> name.endsWith(".csv") })
+                if (value) {
+                    onCloseRequest(directory + file)
+                }
+            }
+        }
+    },
+    dispose = FileDialog::dispose
+)
