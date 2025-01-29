@@ -1,5 +1,6 @@
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.Button
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
@@ -7,10 +8,14 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.*
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.AwtWindow
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.kittinunf.fuel.Fuel
 import com.github.kittinunf.fuel.core.FileDataPart
 import kotlinx.coroutines.launch
@@ -30,7 +35,7 @@ fun App() {
     var calendar = Calendar.getInstance()
     val formatter = SimpleDateFormat("MM-yyyy")
 
-    val importUrlPart = "/api/v1/charge-card/import/"
+    val importUrlPart = "/api/v1/charge-cards/import/"
     val fleetUrlPart = "/api/v1/fleet/import/"
 
     var host by remember { mutableStateOf("http://localhost:8080") }
@@ -43,7 +48,7 @@ fun App() {
     var importText by remember { mutableStateOf("Import!") }
     var isImportEnabled by remember { mutableStateOf(false) }
 
-    var outputText by remember { mutableStateOf("") }
+    var outputText by remember { mutableStateOf(buildAnnotatedString { append("") }) }
 
     if (isFileChooserOpen) {
         FileDialog(
@@ -54,13 +59,15 @@ fun App() {
                 if (chosenFilePath.isNotEmpty()) {
                     val importFile = isImportFile(chosenFilePath)
                     if (importFile != null) {
-                        outputText = "The file is a charge card import card, press import to import the file"
+                        outputText =
+                            buildAnnotatedString { append("The file is a charge card import card, press import to import the file") }
                         isImportEnabled = true
                     } else {
-                        outputText = "The selected file is not an import file (missing the correct headers)"
+                        outputText =
+                            buildAnnotatedString { append("The selected file is not an import file (missing the correct headers)") }
                     }
                 } else {
-                    outputText = "No file selected"
+                    outputText = buildAnnotatedString { append("No file selected") }
                 }
             }
         )
@@ -83,7 +90,7 @@ fun App() {
 
                 Button(
                     onClick = {
-                        calendar.set(Calendar.MONTH, calendar.get(Calendar.MONTH) - 1)
+                        calendar.add(Calendar.MONTH, -1)
                         period = formatter.format(calendar.time)
                     },
                     modifier = Modifier.weight(0.25F, true).align(Alignment.CenterVertically),
@@ -102,7 +109,7 @@ fun App() {
 
                 Button(
                     onClick = {
-                        calendar.set(Calendar.MONTH, calendar.get(Calendar.MONTH) + 1)
+                        calendar.add(Calendar.MONTH, 1)
                         period = formatter.format(calendar.time)
                     },
                     modifier = Modifier.weight(0.25F, true).align(Alignment.CenterVertically),
@@ -134,7 +141,9 @@ fun App() {
                 Spacer(Modifier.requiredWidth(5.dp))
 
                 Button(onClick = {
-                    importText = "Importing"
+                    isImportEnabled = false
+                    importText = "Importing..."
+
                     val importFile = isImportFile(chosenFilePath)
                     if (importFile != null) {
                         coroutineScope.launch {
@@ -142,13 +151,15 @@ fun App() {
                                 importFile,
                                 host.trimEnd('/') + importUrlPart + period,
                                 apiKey,
-                                { body: String, statusCode: Int -> outputText = body })
+                                { body: String, statusCode: Int ->
+                                    outputText =
+                                        convertResultBody(body, statusCode)
+                                })
+                            importText = "Import!"
                         }
                     } else {
-                        outputText = "Import file not found, was it removed?"
+                        outputText = buildAnnotatedString { append("Import file not found, was it removed?") }
                     }
-                    importText = "Import!"
-                    isImportEnabled = false
                 }, enabled = isImportEnabled) {
                     Text(importText)
                 }
@@ -156,13 +167,13 @@ fun App() {
 
             Spacer(Modifier.requiredHeight(10.dp))
 
-            Text(text = outputText, modifier = Modifier.fillMaxWidth().fillMaxHeight())
+            SelectableText(text = outputText, modifier = Modifier.fillMaxWidth().fillMaxHeight())
         }
 
     }
 }
 
-fun main() = application {
+suspend fun main() = application {
     Window(onCloseRequest = ::exitApplication, title = "Rebate Uploader") {
         window.minimumSize = Dimension(1200, 800)
         App()
@@ -216,3 +227,48 @@ private fun FileDialog(
     },
     dispose = FileDialog::dispose
 )
+
+@Composable
+private fun SelectableText(text: AnnotatedString, modifier: Modifier = Modifier.fillMaxWidth()) {
+    SelectionContainer {
+        Text(text = text, modifier = modifier)
+    }
+}
+
+fun convertResultBody(text: String, statusCode: Int): AnnotatedString {
+    val pretty = prettyPrintJsonUsingDefaultPrettyPrinter(text)
+    if (statusCode == 202 && text.contains("reportUrl")) {
+        val regex = Regex("https?://[^\"]+")
+        val match = regex.find(pretty)
+        if (match != null) {
+            val myStyle = SpanStyle(
+                color = Color(0xff64B5F6),
+                textDecoration = TextDecoration.Underline
+            )
+            val preText = "The url for the report won't be usable until validation is complete!\n\n"
+            val url = match.value
+            val annotatedString = buildAnnotatedString {
+                append(preText)
+                append(pretty.substring(0, match.range.first))
+                withLink(LinkAnnotation.Url(url = url)) {
+                    withStyle(style = myStyle) {
+                        append(url)
+                    }
+                }
+                append(pretty.substring(match.range.last + 1))
+            }
+            return annotatedString
+        }
+
+    }
+
+    return buildAnnotatedString {
+        append(pretty)
+    }
+}
+
+fun prettyPrintJsonUsingDefaultPrettyPrinter(uglyJsonString: String): String {
+    val objectMapper = ObjectMapper()
+    val jsonObject = objectMapper.readValue(uglyJsonString, Any::class.java)
+    return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonObject);
+}

@@ -23,6 +23,7 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
     implementation("com.github.kittinunf.fuel:fuel:2.3.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
 }
 
 compose.desktop {
