@@ -263,7 +263,7 @@ fun convertResultBody(text: String, statusCode: Int): AnnotatedString {
     }
 
     return buildAnnotatedString {
-        append(pretty)
+    append(pretty)
     }
 }
 
