@@ -3,5 +3,5 @@ all: build
 build:
 	./gradlew createDistributable
 
-distribute:
+distribution:
 	./gradlew packageDistributionForCurrentOS
