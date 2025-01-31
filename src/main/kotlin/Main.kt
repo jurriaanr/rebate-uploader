@@ -38,7 +38,7 @@ fun App() {
     val importUrlPart = "/api/v1/charge-cards/import/"
     val fleetUrlPart = "/api/v1/fleet/import/"
 
-    var host by remember { mutableStateOf("http://localhost:8080") }
+    var host by remember { mutableStateOf("https://fastned-rebate-service.acc.lightbase.nl") }
     var period by remember { mutableStateOf(formatter.format(calendar.time)) }
     var apiKey by remember { mutableStateOf("password1234") }
 
@@ -146,6 +146,7 @@ fun App() {
 
                     val importFile = isImportFile(chosenFilePath)
                     if (importFile != null) {
+                        outputText = buildAnnotatedString { append("Importing, please wait!") }
                         coroutineScope.launch {
                             uploadFile(
                                 importFile,
@@ -173,17 +174,11 @@ fun App() {
     }
 }
 
-suspend fun main() = application {
+fun main() = application {
     Window(onCloseRequest = ::exitApplication, title = "Rebate Uploader") {
         window.minimumSize = Dimension(1200, 800)
         App()
     }
-}
-
-fun checkFiles(): List<File> {
-    val root = System.getProperty("user.dir")
-    val files = File(root).walk().filter { it.extension == "csv" }.toList().sortedByDescending { it.lastModified() }
-    return files
 }
 
 fun isImportFile(path: String): File? {
