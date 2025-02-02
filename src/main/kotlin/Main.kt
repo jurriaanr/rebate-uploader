@@ -9,6 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.res.loadImageBitmap
+import androidx.compose.ui.res.useResource
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -40,7 +43,7 @@ fun App() {
 
     var host by remember { mutableStateOf("https://fastned-rebate-service.acc.lightbase.nl") }
     var period by remember { mutableStateOf(formatter.format(calendar.time)) }
-    var apiKey by remember { mutableStateOf("password1234") }
+    var apiKey by remember { mutableStateOf("") }
 
     var isFileChooserOpen by remember { mutableStateOf(false) }
     var chosenFilePath by remember { mutableStateOf("") }
@@ -174,8 +177,13 @@ fun App() {
     }
 }
 
+@Suppress("DEPRECATION")
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "Rebate Uploader") {
+    Window(
+        onCloseRequest = ::exitApplication,
+        title = "Rebate Uploader",
+        icon = BitmapPainter(useResource("fastned-48.png", ::loadImageBitmap)),
+    ) {
         window.minimumSize = Dimension(1200, 800)
         App()
     }
@@ -258,7 +266,7 @@ fun convertResultBody(text: String, statusCode: Int): AnnotatedString {
     }
 
     return buildAnnotatedString {
-    append(pretty)
+        append(pretty)
     }
 }
 

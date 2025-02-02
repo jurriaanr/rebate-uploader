@@ -33,12 +33,19 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "rebate-uploader"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.2"
 
+            macOS {
+                iconFile.set(project.file("src/main/resources/fastned.icns"))
+            }
             windows {
                 menu = true
                 // see https://wixtoolset.org/documentation/manual/v3/howtos/general/generate_guids.html
                 upgradeUuid = "61DAB35E-17CB-43B0-81D5-B30E1C0830FA"
+                iconFile.set(project.file("src/main/resources/fastned.ico"))
+            }
+            linux {
+                iconFile.set(project.file("src/main/resources/fastned.png"))
             }
         }
     }
