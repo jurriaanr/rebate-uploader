@@ -1,7 +1,7 @@
 all: build
 
 build:
-	./gradlew createDistributable
+	./"gradlew" createDistributable
 
 distribution:
-	./gradlew packageDistributionForCurrentOS
+	./"gradlew" packageDistributionForCurrentOS
